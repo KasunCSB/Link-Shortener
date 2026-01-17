@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Free Link Shortener - TL;DR for your links. Get to the point. Fast.">
+    <meta name="theme-color" content="#1d4ed8">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Free Link Shortener">
+    <meta property="og:description" content="TL;DR for your links. Get to the point. Fast.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://lnk.kasunc.live">
+    
+    <title>Free Link Shortener | lnk.kasunc.live</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lottie Player -->
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+    
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Hero Section -->
+            <section class="hero">
+                <div class="hero-content">
+                    <h1 class="hero-title">Free Link Shortener</h1>
+                    <p class="hero-tagline">TL;DR for your links. Get to the point. Fast.</p>
+                    
+                    <!-- Hero Graphic (Mobile position: between text and form) -->
+                    <div class="hero-graphic-mobile">
+                        <img 
+                            src="images/landing.svg" 
+                            alt="Link Shortener Illustration"
+                            class="hero-image"
+                            draggable="false"
+                            oncontextmenu="return false;"
+                        >
+                    </div>
+                    
+                    <!-- Shortener Card -->
+                    <div class="shortener-card">
+                        <form id="shorten-form" class="shortener-form">
+                            <div class="input-wrapper">
+                                <input 
+                                    type="url" 
+                                    id="url-input" 
+                                    class="url-input" 
+                                    placeholder="Paste your long URL here..."
+                                    required
+                                    autocomplete="off"
+                                >
+                                <button type="submit" id="shorten-btn" class="shorten-btn">
+                                    <span class="btn-text">Shorten</span>
+                                    <span class="btn-loader hidden">
+                                        <svg class="spinner" viewBox="0 0 24 24">
+                                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round">
+                                                <animate attributeName="stroke-dasharray" values="0 150;42 150;42 150" dur="1.5s" repeatCount="indefinite"/>
+                                                <animate attributeName="stroke-dashoffset" values="0;-16;-59" dur="1.5s" repeatCount="indefinite"/>
+                                            </circle>
+                                        </svg>
+                                    </span>
+                                </button>
+                            </div>
+                            
+                            <!-- Advanced Options Toggle -->
+                            <button type="button" id="advanced-toggle" class="advanced-toggle">
+                                <svg class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                                    <circle cx="4" cy="12" r="2"></circle>
+                                    <circle cx="12" cy="10" r="2"></circle>
+                                    <circle cx="20" cy="14" r="2"></circle>
+                                </svg>
+                                <span>Advanced Options</span>
+                                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </button>
+                            
+                            <!-- Advanced Options Panel -->
+                            <div id="advanced-options" class="advanced-options hidden">
+                                <div class="option-group">
+                                    <label for="custom-suffix" class="option-label">
+                                        Custom suffix
+                                        <span class="option-hint">(optional)</span>
+                                    </label>
+                                    <div class="suffix-input-wrapper">
+                                        <span class="suffix-prefix">lnk.kasunc.live/</span>
+                                        <input 
+                                            type="text" 
+                                            id="custom-suffix" 
+                                            class="suffix-input"
+                                            placeholder="my-link"
+                                            pattern="[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9]"
+                                            minlength="3"
+                                            maxlength="20"
+                                        >
+                                    </div>
+                                    <span id="suffix-status" class="suffix-status"></span>
+                                </div>
+                                
+                                <div class="option-group">
+                                    <label for="expiry-date" class="option-label">
+                                        Expiry date
+                                        <span class="option-hint">(optional, max 1 year)</span>
+                                    </label>
+                                    <input 
+                                        type="date" 
+                                        id="expiry-date" 
+                                        class="date-input"
+                                    >
+                                </div>
+                            </div>
+                        </form>
+                        
+                        <!-- Error Message -->
+                        <div id="error-message" class="error-message hidden"></div>
+                    </div>
+                </div>
+                
+                <!-- Hero Graphic (Desktop position: right side) -->
+                <div class="hero-graphic-desktop">
+                    <img 
+                        src="images/landing.svg" 
+                        alt="Link Shortener Illustration"
+                        class="hero-image"
+                        draggable="false"
+                        oncontextmenu="return false;"
+                    >
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box">
+            <button id="modal-close" class="modal-close" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+            
+            <div class="modal-animation" oncontextmenu="return false;">
+                <lottie-player
+                    id="success-animation"
+                    src="animations/link-ready.json"
+                    background="transparent"
+                    speed="1"
+                    mode="normal"
+                    style="width: 140px; height: 140px;">
+                </lottie-player>
+            </div>
+            
+            <h2 class="modal-title">Your link is ready!</h2>
+            
+            <div class="result-group">
+                <input 
+                    type="text" 
+                    id="result-link" 
+                    class="result-input" 
+                    readonly
+                >
+                <button id="copy-btn" class="copy-btn" title="Copy to clipboard">
+                    <svg id="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <svg id="check-icon" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="qr-section">
+                <p class="qr-label">Scan QR Code</p>
+                <div id="qr-code" class="qr-code"></div>
+            </div>
+            
+            <div class="modal-meta">
+                <span id="expires-info" class="expires-info"></span>
+            </div>
+            
+            <button id="create-another" class="btn-secondary">Create another link</button>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
