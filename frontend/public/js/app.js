@@ -1,7 +1,27 @@
 // API Configuration
-const API_BASE = window.location.hostname === 'localhost' 
-    ? 'http://localhost:8000' 
-    : 'https://lnk-api.kasunc.live';
+// Load runtime config from /config.json (generated from frontend/.env for local dev)
+let API_BASE = 'https://lnk-api.kasunc.live';
+let DEV_MODE = false;
+
+async function loadRuntimeConfig() {
+    try {
+        const res = await fetch('/config.json', {cache: 'no-store'});
+        if (!res.ok) throw new Error('no config');
+        const cfg = await res.json();
+        DEV_MODE = !!cfg.DEV_MODE;
+        if (typeof cfg.API_BASE === 'string' && cfg.API_BASE.trim()) {
+            API_BASE = cfg.API_BASE;
+        } else if (DEV_MODE) {
+            API_BASE = 'http://localhost:8000';
+        }
+    } catch (e) {
+        // fallback: if hostname indicates local, default to localhost API
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            API_BASE = 'http://localhost:8000';
+            DEV_MODE = true;
+        }
+    }
+}
 
 // DOM Elements
 const elements = {
@@ -33,10 +53,13 @@ let suffixCheckTimeout = null;
 let isSubmitting = false;
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    setupEventListeners();
-    setupDateInput();
-    checkForRedirectError();
+// Initialize after runtime config is loaded so API_BASE is correct
+loadRuntimeConfig().then(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+        setupEventListeners();
+        setupDateInput();
+        checkForRedirectError();
+    });
 });
 
 function setupEventListeners() {
@@ -160,14 +183,25 @@ async function handleSubmit(e) {
     hideError();
     
     try {
+        // Map frontend fields to backend schema:
+        // backend expects `custom_code` and `expires_in_days` (not `custom_suffix`/`expires_at`).
         const payload = { url };
-        
+
         if (customSuffix) {
-            payload.custom_suffix = customSuffix;
+            payload.custom_code = customSuffix; // map to backend `custom_code`
         }
-        
+
         if (elements.expiryDate.value) {
-            payload.expires_at = elements.expiryDate.value;
+            // Convert selected expiry date to number of days from today as backend expects `expires_in_days`.
+            const today = new Date();
+            const selected = new Date(elements.expiryDate.value + 'T00:00:00');
+            const msPerDay = 1000 * 60 * 60 * 24;
+            const diffMs = selected - today;
+            const diffDays = Math.ceil(diffMs / msPerDay);
+            if (diffDays > 0) {
+                // Cap to 365 days to match backend validation
+                payload.expires_in_days = Math.min(diffDays, 365);
+            }
         }
         
         const response = await fetch(`${API_BASE}/api/shorten`, {
@@ -176,12 +210,20 @@ async function handleSubmit(e) {
             body: JSON.stringify(payload)
         });
         
-        const data = await response.json();
-        
+        const data = await response.json().catch(() => ({}));
+
         if (!response.ok) {
-            throw new Error(data.detail || 'Failed to shorten URL');
+            // Rate limit handling
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After');
+                let msg = data.detail || data.error || 'Rate limit exceeded. Please try again later.';
+                if (retryAfter) msg += ` Retry after ${retryAfter} seconds.`;
+                throw new Error(msg);
+            }
+
+            throw new Error(data.detail || data.error || 'Failed to shorten URL');
         }
-        
+
         showSuccessModal(data);
         
     } catch (error) {
