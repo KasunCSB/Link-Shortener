@@ -50,9 +50,16 @@
     --transition-slow: 400ms ease;
 }
 
-/* ========================================
-   Reset & Base
-======================================== */
+/* Force centered, non-fullwidth button inside modal (override media queries) */
+.modal .shorten-btn {
+    width: auto !important;
+    min-width: 140px;
+    margin: 0.75rem auto 0 auto;
+    display: inline-flex !important;
+    justify-content: center;
+}
+
+/* Global reset for box sizing and basic spacing */
 *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
@@ -490,7 +497,8 @@ textarea,
 
 .modal-box {
     position: relative;
-    background: var(--bg-elevated);
+    /* Use the page background variable so the popup matches site theme */
+    background: var(--bg-page);
     border-radius: var(--radius-xl);
     padding: clamp(1.5rem, 4vw, 2.5rem);
     max-width: 440px;
@@ -571,25 +579,26 @@ textarea,
 
 .result-input {
     flex: 1;
-    padding: 1rem;
-    font-size: 0.95rem;
+    padding: 0.75rem 0.85rem;
+    font-size: 0.9rem;
     font-weight: 600;
     color: var(--primary);
     background: var(--primary-light);
     border: 2px solid var(--primary);
-    border-radius: var(--radius-md);
+    border-radius: calc(var(--radius-md) - 4px);
     text-align: center;
     outline: none;
 }
 
 .copy-btn {
-    width: 54px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--primary);
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: calc(var(--radius-md) - 6px);
     cursor: pointer;
     color: var(--text-inverse);
     box-shadow: var(--shadow-glow);
@@ -602,8 +611,8 @@ textarea,
 }
 
 .copy-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
 }
 
 .copy-btn.copied {

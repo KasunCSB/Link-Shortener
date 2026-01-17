@@ -92,6 +92,8 @@ function setupEventListeners() {
     
     // Create another
     elements.createAnother.addEventListener('click', createAnotherLink);
+
+
     
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -99,6 +101,68 @@ function setupEventListeners() {
             closeSuccessModal();
         }
     });
+}
+
+// Render a styled QR code using qr-code-styling when available, otherwise fall back to API image
+let currentStyledQr = null;
+function renderStyledQRCode(data) {
+    // Clear previous
+    elements.qrCode.innerHTML = '';
+
+    // Fixed style: modules = dots, finder = rounded squares
+    const dotsType = 'dots';
+
+    if (window.QRCodeStyling) {
+        try {
+            currentStyledQr = new QRCodeStyling({
+                width: 140,
+                height: 140,
+                data,
+                dotsOptions: {
+                    color: '#000000',
+                    type: dotsType
+                },
+                cornersSquareOptions: {
+                    color: '#000000',
+                    type: 'rounded'
+                },
+                cornersDotOptions: {
+                    color: '#000000',
+                    type: 'rounded'
+                },
+                backgroundOptions: {
+                    color: '#ffffff'
+                },
+                imageOptions: {
+                    crossOrigin: 'anonymous',
+                    margin: 0
+                }
+            });
+
+            // Append to container
+            currentStyledQr.append(elements.qrCode);
+            return;
+        } catch (e) {
+            // fallthrough to image fallback
+            console.warn('Styled QR render failed, falling back to static image', e);
+        }
+    }
+
+    // Fallback: use external API image
+    try {
+        const img = document.createElement('img');
+        img.alt = 'QR code';
+        img.width = 140;
+        img.height = 140;
+        img.className = 'qr-img';
+        img.src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(data)}`;
+        elements.qrCode.appendChild(img);
+    } catch (e) {
+        const p = document.createElement('p');
+        p.textContent = data;
+        p.className = 'qr-fallback';
+        elements.qrCode.appendChild(p);
+    }
 }
 
 function setupDateInput() {
@@ -275,24 +339,9 @@ function showSuccessModal(data) {
     const shortUrl = data.short_url;
     elements.resultLink.value = shortUrl;
     
-    // Generate QR Code using a simple, reliable image service as primary option.
-    // This avoids depending on a client-side library which may have differing
-    // browser globals/signatures across versions.
+    // Generate QR Code using styled renderer when available (fallback to image service)
     elements.qrCode.innerHTML = '';
-    try {
-        const img = document.createElement('img');
-        img.alt = 'QR code';
-        img.width = 140;
-        img.height = 140;
-        img.className = 'qr-img';
-        img.src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(shortUrl)}`;
-        elements.qrCode.appendChild(img);
-    } catch (e) {
-        const p = document.createElement('p');
-        p.textContent = shortUrl;
-        p.className = 'qr-fallback';
-        elements.qrCode.appendChild(p);
-    }
+    renderStyledQRCode(shortUrl);
     
     // Expiry info
     if (data.expires_at) {
