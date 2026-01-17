@@ -2,17 +2,25 @@ import redis
 from typing import Optional, Any, cast
 from .config import settings
 
-# Redis connection pool
-pool = redis.ConnectionPool(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    db=settings.REDIS_DB,
-    password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
-    decode_responses=True,
-    max_connections=20
-)
+# If DEV_MODE is enabled we avoid creating a real Redis connection and
+# make the RedisService methods no-op / return safe defaults so the
+# application can run locally without a Redis server.
+USE_REDIS = not settings.DEV_MODE
 
-redis_client = redis.Redis(connection_pool=pool)
+if USE_REDIS:
+    # Redis connection pool
+    pool = redis.ConnectionPool(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        db=settings.REDIS_DB,
+        password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
+        decode_responses=True,
+        max_connections=20
+    )
+
+    redis_client = redis.Redis(connection_pool=pool)
+else:
+    redis_client = None
 
 
 class RedisService:
@@ -29,6 +37,8 @@ class RedisService:
     @staticmethod
     def cache_link(code: str, url: str) -> bool:
         """Cache a short code to URL mapping."""
+        if not USE_REDIS:
+            return False
         try:
             redis_client.setex(
                 f"{RedisService.LINK_CACHE_PREFIX}{code}",
@@ -42,6 +52,8 @@ class RedisService:
     @staticmethod
     def get_cached_link(code: str) -> Optional[str]:
         """Get cached URL for a short code."""
+        if not USE_REDIS:
+            return None
         try:
             result = redis_client.get(f"{RedisService.LINK_CACHE_PREFIX}{code}")
             return cast(Optional[str], result)
@@ -51,6 +63,8 @@ class RedisService:
     @staticmethod
     def delete_cached_link(code: str) -> bool:
         """Delete cached link."""
+        if not USE_REDIS:
+            return False
         try:
             redis_client.delete(f"{RedisService.LINK_CACHE_PREFIX}{code}")
             return True
@@ -60,6 +74,9 @@ class RedisService:
     @staticmethod
     def add_code_to_set(code: str) -> bool:
         """Add a code to the set of used codes."""
+        if not USE_REDIS:
+            # Pretend it succeeded so uniqueness checks can still proceed using DB
+            return True
         try:
             redis_client.sadd(RedisService.CODES_SET, code)
             return True
@@ -69,6 +86,8 @@ class RedisService:
     @staticmethod
     def code_exists(code: str) -> bool:
         """Check if a code exists in the set."""
+        if not USE_REDIS:
+            return False
         try:
             return bool(redis_client.sismember(RedisService.CODES_SET, code))
         except Exception:
@@ -77,6 +96,8 @@ class RedisService:
     @staticmethod
     def remove_code_from_set(code: str) -> bool:
         """Remove a code from the set."""
+        if not USE_REDIS:
+            return True
         try:
             redis_client.srem(RedisService.CODES_SET, code)
             return True
@@ -91,6 +112,10 @@ class RedisService:
         """
         if limit is None:
             limit = settings.RATE_LIMIT_PER_HOUR
+
+        if not USE_REDIS:
+            # No Redis in dev: allow requests and report remaining limit
+            return True, limit - 1
         
         key = f"{RedisService.RATE_LIMIT_PREFIX}{ip}"
         
@@ -117,6 +142,8 @@ class RedisService:
     @staticmethod
     def increment_click_stats(code: str) -> bool:
         """Increment click stats for a code."""
+        if not USE_REDIS:
+            return True
         try:
             redis_client.incr(f"{RedisService.STATS_PREFIX}{code}:clicks")
             return True
@@ -126,6 +153,8 @@ class RedisService:
     @staticmethod
     def get_click_stats(code: str) -> int:
         """Get click stats from Redis."""
+        if not USE_REDIS:
+            return 0
         try:
             clicks = redis_client.get(f"{RedisService.STATS_PREFIX}{code}:clicks")
             return int(str(clicks)) if clicks else 0
@@ -135,6 +164,8 @@ class RedisService:
     @staticmethod
     def sync_codes_from_db(codes: list) -> bool:
         """Sync all codes from database to Redis set."""
+        if not USE_REDIS:
+            return True
         try:
             if codes:
                 redis_client.delete(RedisService.CODES_SET)
@@ -146,6 +177,8 @@ class RedisService:
     @staticmethod
     def health_check() -> bool:
         """Check Redis connection health."""
+        if not USE_REDIS:
+            return True
         try:
             return bool(redis_client.ping())
         except Exception:

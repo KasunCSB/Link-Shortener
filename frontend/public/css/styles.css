@@ -788,3 +788,157 @@ textarea,
         padding: 0.75rem;
     }
 }
+
+/* ========================================
+   Footer links (bottom centered)
+======================================== */
+.site-footer {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: clamp(0.75rem, 2vh, 1rem);
+    z-index: 60;
+    pointer-events: none; /* allow clicks only on children */
+    font-family: 'Inter', 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.footer-links {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+}
+
+.footer-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--primary); /* black */
+    text-decoration: none;
+    font-family: 'Inter', 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 600;
+    font-size: 0.82rem; /* smaller */
+    letter-spacing: -0.01em; /* tighten spacing */
+    padding: 2px 0 3px 0;
+    position: relative;
+    transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+/* Separator between links */
+.footer-link + .footer-link::before {
+    content: '|';
+    margin: 0 0.5rem;
+    color: var(--primary);
+    font-weight: 600;
+    pointer-events: none;
+}
+
+.footer-link:hover,
+.footer-link:focus {
+    color: var(--primary);
+}
+
+/* Move text on hover, not the icon, so SVG strokes stay static */
+.footer-link .footer-text {
+    transition: transform var(--transition-fast);
+}
+.footer-link:hover .footer-text,
+.footer-link:focus .footer-text {
+    transform: translateY(-2px);
+}
+
+/* Target the text only so underline centers under the text (not icon) */
+.footer-text {
+    position: relative;
+    display: inline-block;
+}
+
+.footer-text::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    /* place underline noticeably below the text */
+    top: calc(100% + 0.2rem); /* adjust 0.2rem to your preferred distance */
+    width: 60%; /* percentage of the text width */
+    height: 2px;
+    border-radius: 2px;
+    background: var(--primary);
+    transform-origin: center center;
+    transform: translateX(-50%) scaleX(0);
+    transition: transform var(--transition-fast) ease;
+}
+
+.footer-link:hover .footer-text::after,
+.footer-link:focus .footer-text::after {
+    transform: translateX(-50%) scaleX(1);
+}
+
+.footer-icon {
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+    flex-shrink: 0;
+    vertical-align: middle;
+    color: inherit;
+}
+/* Nudge icon up a pixel for visual alignment with text */
+.footer-icon { transform: translateY(-1px); }
+
+/* Coffee plate */
+.coffee-plate { fill: currentColor; opacity: 0.12; }
+
+/* Note: underline now applied to .footer-text only (above) - removed duplicate rule */
+
+.footer-link:focus-visible {
+    outline: 3px solid rgba(0,0,0,0.08);
+    outline-offset: 3px;
+    border-radius: 6px;
+}
+
+@media (max-width: 480px) {
+    .footer-links {
+        gap: 0.45rem;
+    }
+    .footer-link {
+        font-size: 0.75rem;
+    }
+    .footer-icon {
+        width: 14px;
+        height: 14px;
+    }
+}
+
+/* Mobile: make footer part of document flow to avoid overlapping inputs */
+@media (max-width: 600px) {
+    .site-footer {
+        position: static;
+        left: auto;
+        transform: none;
+        bottom: auto;
+        pointer-events: auto;
+        margin-top: 1rem;
+        width: 100%;
+        text-align: center;
+        padding: 0.5rem 0;
+    }
+
+    /* keep footer links centered and compact */
+    .footer-links {
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    /* ensure footer doesn't cover inputs when keyboard opens */
+    .page-wrapper {
+        padding-bottom: 0.5rem;
+    }
+}
+
+/* Desktop: add bottom padding so fixed footer doesn't overlap page content */
+@media (min-width: 601px) {
+    .page-wrapper {
+        padding-bottom: 4rem; /* space for footer */
+    }
+}
+

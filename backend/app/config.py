@@ -1,6 +1,7 @@
 import os
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -8,6 +9,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "Link Shortener"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
+    # When True, avoid connecting to external services (MySQL/Redis) for local development
+    DEV_MODE: bool = False
     BASE_URL: str = "https://lnk.kasunc.live"
     
     # Database
@@ -41,7 +44,8 @@ class Settings(BaseSettings):
     ]
     
     class Config:
-        env_file = ".env"
+        # Resolve backend/.env relative to this file so settings load correctly
+        env_file = str(Path(__file__).resolve().parents[1] / ".env")
         case_sensitive = True
 
 

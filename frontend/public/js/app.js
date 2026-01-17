@@ -55,11 +55,22 @@ let isSubmitting = false;
 // Initialize
 // Initialize after runtime config is loaded so API_BASE is correct
 loadRuntimeConfig().then(() => {
-    document.addEventListener('DOMContentLoaded', () => {
-        setupEventListeners();
-        setupDateInput();
-        checkForRedirectError();
-    });
+    const init = () => {
+        try {
+            setupEventListeners();
+            setupDateInput();
+            checkForRedirectError();
+        } catch (e) {
+            // if elements not present, fail gracefully
+            console.error('Initialization error', e);
+        }
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 });
 
 function setupEventListeners() {
@@ -264,15 +275,24 @@ function showSuccessModal(data) {
     const shortUrl = data.short_url;
     elements.resultLink.value = shortUrl;
     
-    // Generate QR Code
+    // Generate QR Code using a simple, reliable image service as primary option.
+    // This avoids depending on a client-side library which may have differing
+    // browser globals/signatures across versions.
     elements.qrCode.innerHTML = '';
-    QRCode.toCanvas(shortUrl, {
-        width: 140,
-        margin: 2,
-        color: { dark: '#1d4ed8', light: '#ffffff' }
-    }, (error, canvas) => {
-        if (!error) elements.qrCode.appendChild(canvas);
-    });
+    try {
+        const img = document.createElement('img');
+        img.alt = 'QR code';
+        img.width = 140;
+        img.height = 140;
+        img.className = 'qr-img';
+        img.src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(shortUrl)}`;
+        elements.qrCode.appendChild(img);
+    } catch (e) {
+        const p = document.createElement('p');
+        p.textContent = shortUrl;
+        p.className = 'qr-fallback';
+        elements.qrCode.appendChild(p);
+    }
     
     // Expiry info
     if (data.expires_at) {

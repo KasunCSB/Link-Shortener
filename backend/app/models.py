@@ -8,7 +8,8 @@ class Link(Base):
     
     __tablename__ = "links"
     
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    # Use Integer for primary key so SQLite ``AUTOINCREMENT`` works predictably
+    id = Column(Integer, primary_key=True, autoincrement=True)
     short_code = Column(String(20), unique=True, nullable=False, index=True)
     original_url = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -32,7 +33,8 @@ class Click(Base):
     
     __tablename__ = "clicks"
     
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    # Use Integer for primary key for SQLite compatibility
+    id = Column(Integer, primary_key=True, autoincrement=True)
     link_id = Column(BigInteger, nullable=False, index=True)
     clicked_at = Column(DateTime(timezone=True), server_default=func.now())
     ip_hash = Column(String(64), nullable=True)  # SHA-256 hash for privacy
