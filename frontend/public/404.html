@@ -122,9 +122,17 @@
             opacity: 0.95;
         }
 
-        .btn-primary svg {
-            width: 14px;
-            height: 14px;
+        .btn-primary .btn-icon {
+            margin: 0; /* no margins */
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.25em;
+            height: 1.25em;
+            font-size: 1.05rem; /* slightly larger than button text */
+            line-height: 1;
+            color: currentColor; /* inherit button color */
         }
 
         /* Footer */
@@ -220,10 +228,7 @@
             </p>
             
             <a href="/" class="btn-primary" aria-label="Create a new link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="bevel" aria-hidden="true">
-                    <path d="M4 12h16"></path>
-                    <path d="M12 4v16"></path>
-                </svg>
+                <span class="btn-icon" aria-hidden="true">+</span>
                 Create a New Link
             </a>
         </div>
