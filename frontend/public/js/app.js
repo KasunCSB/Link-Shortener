@@ -176,11 +176,13 @@ function setupDateInput() {
 
 function checkForRedirectError() {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('error') === 'notfound') {
-        // Redirect to 404 page
+    const err = urlParams.get('error');
+    if (err === 'notfound') {
         window.location.href = '/404.html';
+    } else if (err === 'expired') {
+        window.location.href = '/expired.html';
     }
-}
+} 
 
 // Toggle Advanced Options
 function toggleAdvancedOptions() {

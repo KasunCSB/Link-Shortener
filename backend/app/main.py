@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 import logging
+from datetime import datetime, timezone
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
@@ -107,15 +108,36 @@ async def redirect_to_url(
     
     code_lower = code.lower()
     
-    # Get original URL
+    # Try to resolve link record first so we can distinguish not found vs expired
+    accept = request.headers.get("accept", "")
+
+    link = db.query(Link).filter(Link.short_code == code_lower).first()
+
+    if not link:
+        if "text/html" in accept:
+            return RedirectResponse(url=f"/404.html?code={code}", status_code=302)
+        return JSONResponse(status_code=404, content={"error": "Link not found"})
+
+    # If link is inactive or expired, route to the expired page for browsers
+    expires_at_val = getattr(link, "expires_at", None)
+    if not link.is_active or (expires_at_val and expires_at_val < datetime.now(timezone.utc)):
+        if expires_at_val and expires_at_val < datetime.now(timezone.utc):
+            if "text/html" in accept:
+                return RedirectResponse(url=f"/expired.html?code={code}", status_code=302)
+            return JSONResponse(status_code=404, content={"error": "Link expired"})
+        # Other inactive reasons
+        if "text/html" in accept:
+            return RedirectResponse(url=f"/404.html?code={code}", status_code=302)
+        return JSONResponse(status_code=404, content={"error": "Link not found"})
+
+    # Get original URL (cache-aware)
     url = LinkService.get_original_url(db, code_lower)
-    
+
     if not url:
         # Return 404 JSON for API clients, redirect for browsers
-        accept = request.headers.get("accept", "")
         if "text/html" in accept:
-            return RedirectResponse(url=f"/?error=notfound&code={code}", status_code=302)
-        return JSONResponse(status_code=404, content={"error": "Link not found or expired"})
+            return RedirectResponse(url=f"/404.html?code={code}", status_code=302)
+        return JSONResponse(status_code=404, content={"error": "Link not found"})
     
     # Record click asynchronously (non-blocking)
     link = LinkService.get_link_by_code(db, code_lower)
