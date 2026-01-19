@@ -9,8 +9,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "Link Shortener"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
-    # When True, avoid connecting to external services (MySQL/Redis) for local development
-    DEV_MODE: bool = False
     BASE_URL: str = "https://lnk.kasunc.live"
     
     # Database

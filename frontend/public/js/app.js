@@ -1,24 +1,21 @@
 // API Configuration
-// Load runtime config from /config.json (generated from frontend/.env for local dev)
+// Load runtime config from /config.json
 let API_BASE = 'https://lnk-api.kasunc.live';
-let DEV_MODE = false;
 
 async function loadRuntimeConfig() {
     try {
         const res = await fetch('/config.json', {cache: 'no-store'});
         if (!res.ok) throw new Error('no config');
         const cfg = await res.json();
-        DEV_MODE = !!cfg.DEV_MODE;
         if (typeof cfg.API_BASE === 'string' && cfg.API_BASE.trim()) {
             API_BASE = cfg.API_BASE;
-        } else if (DEV_MODE) {
+        } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             API_BASE = 'http://localhost:8000';
         }
     } catch (e) {
         // fallback: if hostname indicates local, default to localhost API
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             API_BASE = 'http://localhost:8000';
-            DEV_MODE = true;
         }
     }
 }

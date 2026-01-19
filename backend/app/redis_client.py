@@ -2,25 +2,20 @@ import redis
 from typing import Optional, Any, cast
 from .config import settings
 
-# If DEV_MODE is enabled we avoid creating a real Redis connection and
-# make the RedisService methods no-op / return safe defaults so the
-# application can run locally without a Redis server.
-USE_REDIS = not settings.DEV_MODE
+# Redis is required in production; always enable the client
+USE_REDIS = True
 
-if USE_REDIS:
-    # Redis connection pool
-    pool = redis.ConnectionPool(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        db=settings.REDIS_DB,
-        password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
-        decode_responses=True,
-        max_connections=20
-    )
+# Redis connection pool
+pool = redis.ConnectionPool(
+    host=settings.REDIS_HOST,
+    port=settings.REDIS_PORT,
+    db=settings.REDIS_DB,
+    password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
+    decode_responses=True,
+    max_connections=20
+)
 
-    redis_client = redis.Redis(connection_pool=pool)
-else:
-    redis_client = None
+redis_client = redis.Redis(connection_pool=pool) 
 
 
 class RedisService:
