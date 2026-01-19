@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Link Shortener"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
-    BASE_URL: str = "https://lnk.kasunc.live"
+    BASE_URL: str = "https://lk.kasunc.uk"
     
     # Database
     MYSQL_HOST: str = "localhost"
