@@ -120,6 +120,9 @@ async def redirect_to_url(
 
     # If link is inactive or expired, route to the expired page for browsers
     expires_at_val = getattr(link, "expires_at", None)
+    # Normalize naive datetimes (from DB) to UTC-aware to avoid comparison errors
+    if expires_at_val is not None and getattr(expires_at_val, "tzinfo", None) is None:
+        expires_at_val = expires_at_val.replace(tzinfo=timezone.utc)
     if not link.is_active or (expires_at_val and expires_at_val < datetime.now(timezone.utc)):
         if expires_at_val and expires_at_val < datetime.now(timezone.utc):
             if "text/html" in accept:
