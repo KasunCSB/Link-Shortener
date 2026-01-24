@@ -1,20 +1,21 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional, Any, cast
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from .models import Link, Click, BlockedDomain
+from .models import Link
 from .redis_client import RedisService
 from .utils import (
     generate_short_code,
-    hash_ip,
     is_reserved_code,
     extract_domain,
     detect_user_agent_type,
     sanitize_referer,
-    format_short_url
+    format_short_url,
+    utc_now,
+    normalize_utc
 )
-from .config import settings
+from .env import get_int
 
 
 class LinkService:
@@ -32,15 +33,7 @@ class LinkService:
         Create a new shortened link.
         Returns (link, error_message).
         """
-        # Check for blocked domain
-        domain = extract_domain(original_url)
-        if domain:
-            blocked = db.query(BlockedDomain).filter(
-                BlockedDomain.domain == domain
-            ).first()
-            if blocked:
-                return None, f"This domain is blocked: {blocked.reason or 'spam'}"
-        
+
         # Generate or validate short code
         if custom_code:
             code = custom_code.lower()
@@ -50,16 +43,18 @@ class LinkService:
                 return None, "This short code is reserved"
             
             # Check length
-            if len(code) < settings.MIN_CUSTOM_CODE_LENGTH:
-                return None, f"Code must be at least {settings.MIN_CUSTOM_CODE_LENGTH} characters"
-            if len(code) > settings.MAX_CUSTOM_CODE_LENGTH:
-                return None, f"Code must be at most {settings.MAX_CUSTOM_CODE_LENGTH} characters"
+            min_len = get_int("MIN_CUSTOM_CODE_LENGTH")
+            max_len = get_int("MAX_CUSTOM_CODE_LENGTH")
+            if len(code) < min_len:
+                return None, f"Code must be at least {min_len} characters"
+            if len(code) > max_len:
+                return None, f"Code must be at most {max_len} characters"
             
             # Check if code exists (Redis first, then DB)
             if RedisService.code_exists(code):
                 return None, "This short code is already taken"
-            
-            existing = db.query(Link).filter(Link.short_code == code).first()
+
+            existing = db.query(Link).filter(Link.suffix == code).first()
             if existing:
                 return None, "This short code is already taken"
         else:
@@ -70,7 +65,7 @@ class LinkService:
                 candidate = generate_short_code()
                 if not RedisService.code_exists(candidate):
                     existing = db.query(Link).filter(
-                        Link.short_code == candidate
+                        Link.suffix == candidate
                     ).first()
                     if not existing:
                         code = candidate
@@ -82,132 +77,96 @@ class LinkService:
         # Calculate expiry
         expires_at = None
         if expires_in_days:
-            expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
-        elif settings.DEFAULT_EXPIRY_DAYS:
-            expires_at = datetime.now(timezone.utc) + timedelta(days=settings.DEFAULT_EXPIRY_DAYS)
+            expires_at = utc_now() + timedelta(days=expires_in_days)
+        else:
+            default_days = get_int("DEFAULT_EXPIRY_DAYS")
+            expires_at = utc_now() + timedelta(days=default_days)
         
         # Create link
         link = Link(
-            short_code=code,
-            original_url=original_url,
+            suffix=code,
+            destination=original_url,
             expires_at=expires_at,
-            creator_ip_hash=hash_ip(creator_ip) if creator_ip else None
+            ip_address=creator_ip
         )
         
         db.add(link)
         db.commit()
         db.refresh(link)
         
-        # Cache in Redis
-        RedisService.cache_link(code, original_url)
+        # Cache in Redis (include expiry if set) — Redis TTL will match DB expiry
+        RedisService.cache_link(code, original_url, expires_at=expires_at)
         RedisService.add_code_to_set(code)
         
         return link, None
     
     @staticmethod
     def get_link_by_code(db: Session, code: str) -> Optional[Link]:
-        """Get a link by its short code."""
-        return db.query(Link).filter(
-            and_(
-                Link.short_code == code,
-                Link.is_active == True
-            )
-        ).first()
+        """Get a link by its suffix."""
+        return db.query(Link).filter(Link.suffix == code).first()
     
     @staticmethod
-    def get_original_url(db: Session, code: str) -> Optional[str]:
+    def get_original_url(db: Session, code: str) -> tuple[Optional[str], bool]:
         """
-        Get original URL for a short code.
-        Checks Redis cache first, falls back to DB.
+        Get original URL for a suffix.
+        Returns tuple (url_or_none, expired_flag).
+        Checks Redis cache first, falls back to DB. If DB row exists but is expired,
+        returns (None, True). If not found, returns (None, False).
         """
         # Check cache first
         cached = RedisService.get_cached_link(code)
         if cached:
-            return cached
-        
+            return cached, False
+
         # Check database
-        link = db.query(Link).filter(
-            and_(
-                Link.short_code == code,
-                Link.is_active == True
-            )
-        ).first()
-        
+        link = db.query(Link).filter(Link.suffix == code).first()
+
         if not link:
-            return None
-        
+            return None, False
+
         # Check expiry
-        expires_at_val = cast(Optional[datetime], link.expires_at)
-        if expires_at_val and expires_at_val < datetime.now(timezone.utc):
-            link.is_active = False  # type: ignore
-            db.commit()
+        expires_at_val = normalize_utc(cast(Optional[datetime], link.expires_at))
+        if expires_at_val and expires_at_val < utc_now():
+            # Ensure Redis doesn't have the expired key
             RedisService.delete_cached_link(code)
             RedisService.remove_code_from_set(code)
-            return None
-        
-        # Cache for future requests
-        original_url = cast(str, link.original_url)
-        RedisService.cache_link(code, original_url)
-        
-        return original_url
+            return None, True
+
+        # Cache for future requests (set TTL based on DB expiry)
+        destination = cast(str, link.destination)
+        RedisService.cache_link(code, destination, expires_at=expires_at_val)
+
+        return destination, False
     
     @staticmethod
-    def record_click(
-        db: Session,
-        link: Link,
-        ip: Optional[str] = None,
-        country: Optional[str] = None,
-        referer: Optional[str] = None,
-        user_agent: Optional[str] = None
-    ) -> None:
-        """Record a click on a link."""
-        # Increment click count
-        link.click_count += 1  # type: ignore
-        
-        # Create click record
-        click = Click(
-            link_id=link.id,
-            ip_hash=hash_ip(ip) if ip else None,
-            country=country[:2] if country else None,
-            referer=sanitize_referer(referer) if referer else None,
-            user_agent_type=detect_user_agent_type(user_agent) if user_agent else None
-        )
-        
-        db.add(click)
-        db.commit()
-        
-        # Update Redis stats
-        short_code = cast(str, link.short_code)
-        RedisService.increment_click_stats(short_code)
+    # Click recording removed per user's request
     
     @staticmethod
     def get_link_stats(db: Session, code: str) -> Optional[dict[str, Any]]:
         """Get statistics for a link."""
-        link = db.query(Link).filter(Link.short_code == code).first()
+        link = db.query(Link).filter(Link.suffix == code).first()
         
         if not link:
             return None
         
-        short_code = cast(str, link.short_code)
+        suffix = cast(str, link.suffix)
         return {
-            "short_code": short_code,
-            "original_url": cast(str, link.original_url),
-            "short_url": format_short_url(short_code),
-            "click_count": cast(int, link.click_count),
+            "suffix": suffix,
+            "destination": cast(str, link.destination),
+            "short_url": format_short_url(suffix),
             "created_at": cast(datetime, link.created_at),
             "expires_at": cast(Optional[datetime], link.expires_at),
-            "is_active": cast(bool, link.is_active)
         }
     
     @staticmethod
     def deactivate_link(db: Session, code: str) -> bool:
-        """Deactivate a link."""
-        link = db.query(Link).filter(Link.short_code == code).first()
+        """Delete a link from DB and Redis."""
+        link = db.query(Link).filter(Link.suffix == code).first()
         
         if not link:
             return False
         
-        link.is_active = False  # type: ignore
+        db.delete(link)
         db.commit()
         
         RedisService.delete_cached_link(code)
@@ -217,23 +176,16 @@ class LinkService:
     
     @staticmethod
     def cleanup_expired_links(db: Session) -> int:
-        """Deactivate all expired links. Returns count of deactivated links."""
-        now = datetime.now(timezone.utc)
-        
-        expired_links = db.query(Link).filter(
-            and_(
-                Link.expires_at < now,
-                Link.is_active == True
-            )
-        ).all()
-        
+        """Remove expired entries from Redis. Returns number removed from Redis."""
+        now = utc_now()
+        expired_links = db.query(Link).filter(Link.expires_at != None).filter(Link.expires_at < now).all()
         count = 0
         for link in expired_links:
-            link.is_active = False  # type: ignore
-            short_code = cast(str, link.short_code)
-            RedisService.delete_cached_link(short_code)
-            RedisService.remove_code_from_set(short_code)
-            count += 1
-        
-        db.commit()
+            try:
+                suffix = cast(str, link.suffix)
+                RedisService.delete_cached_link(suffix)
+                RedisService.remove_code_from_set(suffix)
+                count += 1
+            except Exception:
+                continue
         return count

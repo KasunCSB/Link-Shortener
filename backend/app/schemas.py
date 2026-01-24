@@ -1,7 +1,8 @@
 from pydantic import BaseModel, HttpUrl, Field, field_validator, model_validator
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import re
+from .utils import utc_now, normalize_utc
 
 
 class ShortenRequest(BaseModel):
@@ -75,17 +76,17 @@ class ShortenRequest(BaseModel):
         # Map expires_at (ISO date) -> expires_in_days
         if 'expires_at' in values and 'expires_in_days' not in values:
             try:
-                from datetime import datetime, timezone
                 raw = values.get('expires_at')
                 # Accept date-only like YYYY-MM-DD or full ISO
                 if isinstance(raw, str):
                     # If only date provided, append time to parse
                     if re.match(r'^\d{4}-\d{2}-\d{2}$', raw):
-                        selected = datetime.fromisoformat(raw + 'T00:00:00')
+                        selected = datetime.fromisoformat(raw + 'T00:00:00').replace(tzinfo=timezone.utc)
                     else:
                         selected = datetime.fromisoformat(raw)
-                    today = datetime.now(selected.tzinfo or timezone.utc)
-                    diff = selected - today
+                        selected = normalize_utc(selected)
+                    today = utc_now()
+                    diff = (selected or today) - today
                     diff_days = int(diff.total_seconds() // 86400)
                     if diff_days < 1:
                         diff_days = 1
@@ -101,7 +102,7 @@ class ShortenResponse(BaseModel):
     """Response schema for created short link."""
     
     short_url: str
-    short_code: str
+    suffix: str
     original_url: str
     expires_at: Optional[datetime]
     created_at: datetime
@@ -113,12 +114,10 @@ class ShortenResponse(BaseModel):
 class LinkStatsResponse(BaseModel):
     """Response schema for link statistics."""
     
-    short_code: str
+    suffix: str
     original_url: str
-    click_count: int
     created_at: datetime
     expires_at: Optional[datetime]
-    is_active: bool
     
     class Config:
         from_attributes = True
@@ -127,7 +126,7 @@ class LinkStatsResponse(BaseModel):
 class LinkPreviewResponse(BaseModel):
     """Response schema for link preview."""
     
-    short_code: str
+    suffix: str
     original_url: str
     is_safe: bool = True
     warning: Optional[str] = None

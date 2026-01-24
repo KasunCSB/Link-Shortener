@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from typing import cast
+from typing import cast, Optional
 from datetime import datetime
 
 from .database import get_db
@@ -71,10 +71,10 @@ async def create_short_link(
         raise HTTPException(status_code=500, detail="Failed to create link")
     
     return ShortenResponse(
-        short_url=format_short_url(cast(str, link.short_code)),
-        short_code=cast(str, link.short_code),
-        original_url=cast(str, link.original_url),
-        expires_at=cast(datetime | None, link.expires_at),
+        short_url=format_short_url(cast(str, link.suffix)),
+        suffix=cast(str, link.suffix),
+        original_url=cast(str, link.destination),
+        expires_at=cast(Optional[datetime], link.expires_at),
         created_at=cast(datetime, link.created_at)
     )
 
@@ -94,13 +94,16 @@ async def get_link_stats(
     if not stats:
         raise HTTPException(status_code=404, detail="Link not found")
     
+    destination = cast(str, stats["destination"])
+    created_at = cast(datetime, stats["created_at"])
+    expires_at = cast(Optional[datetime], stats["expires_at"])
+    suffix = cast(str, stats.get("suffix") or code.lower())
+
     return LinkStatsResponse(
-        short_code=stats["short_code"],
-        original_url=stats["original_url"],
-        click_count=stats["click_count"],
-        created_at=stats["created_at"],
-        expires_at=stats["expires_at"],
-        is_active=stats["is_active"]
+        suffix=suffix,
+        original_url=destination,
+        created_at=created_at,
+        expires_at=expires_at,
     )
 
 
@@ -114,13 +117,15 @@ async def preview_link(
     db: Session = Depends(get_db)
 ):
     """Preview a link before redirecting."""
-    url = LinkService.get_original_url(db, code.lower())
-    
+    url, expired = LinkService.get_original_url(db, code.lower())
+
     if not url:
-        raise HTTPException(status_code=404, detail="Link not found or expired")
-    
+        if expired:
+            raise HTTPException(status_code=410, detail="Link expired")
+        raise HTTPException(status_code=404, detail="Link not found")
+
     return LinkPreviewResponse(
-        short_code=code.lower(),
+        suffix=code.lower(),
         original_url=url,
         is_safe=True
     )
@@ -140,7 +145,7 @@ async def check_code_availability(
     if RedisService.code_exists(code_lower):
         return {"available": False, "reason": "taken"}
     
-    existing = db.query(Link).filter(Link.short_code == code_lower).first()
+    existing = db.query(Link).filter(Link.suffix == code_lower).first()
     
     if existing:
         return {"available": False, "reason": "taken"}

@@ -1,11 +1,15 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from .config import settings
+from .env import get_env, get_int
 
-DATABASE_URL = f"mysql+pymysql://{settings.MYSQL_USER}:{settings.MYSQL_PASSWORD}@{settings.MYSQL_HOST}:{settings.MYSQL_PORT}/{settings.MYSQL_DATABASE}"
+DATABASE_URL = (
+    f"mysql+pymysql://{get_env('MYSQL_USER')}:{get_env('MYSQL_PASSWORD')}"
+    f"@{get_env('MYSQL_HOST')}:{get_int('MYSQL_PORT')}/{get_env('MYSQL_DATABASE')}"
+)
 engine = create_engine(
     DATABASE_URL,
+    connect_args={"init_command": "SET time_zone = '+00:00'"},
     pool_pre_ping=True,
     pool_recycle=3600,
     pool_size=10,

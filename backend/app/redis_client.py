@@ -1,16 +1,17 @@
 import redis
 from typing import Optional, Any, cast
-from .config import settings
+from datetime import datetime, timezone
+from .env import get_env, get_int
 
 # Redis is required in production; always enable the client
 USE_REDIS = True
 
 # Redis connection pool
 pool = redis.ConnectionPool(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    db=settings.REDIS_DB,
-    password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
+    host=get_env("REDIS_HOST"),
+    port=get_int("REDIS_PORT"),
+    db=get_int("REDIS_DB"),
+    password=get_env("REDIS_PASSWORD") or None,
     decode_responses=True,
     max_connections=20
 )
@@ -24,22 +25,49 @@ class RedisService:
     LINK_CACHE_PREFIX = "link:"
     CODES_SET = "codes:used"
     RATE_LIMIT_PREFIX = "ratelimit:ip:"
-    STATS_PREFIX = "stats:"
     
     CACHE_TTL = 86400  # 24 hours
     RATE_LIMIT_TTL = 3600  # 1 hour
     
     @staticmethod
-    def cache_link(code: str, url: str) -> bool:
+    def cache_link(code: str, url: str, expires_at: Optional[datetime] = None) -> bool:
         """Cache a short code to URL mapping."""
         if not USE_REDIS:
             return False
         try:
-            redis_client.setex(
-                f"{RedisService.LINK_CACHE_PREFIX}{code}",
-                RedisService.CACHE_TTL,
-                url
-            )
+            # Store as a hash; TTL on the key enforces expiry
+            key = f"{RedisService.LINK_CACHE_PREFIX}{code}"
+            mapping: dict[str, str] = {"url": url}
+            # Do not store expires_at in the hash payload -- TTL on the key handles expiry
+            redis_client.hset(key, mapping=mapping)
+            # Set TTL on the hash to match DB expiry if provided, otherwise persist
+            try:
+                if expires_at:
+                    now = datetime.now(timezone.utc)
+                    # Normalize naive
+                    if getattr(expires_at, "tzinfo", None) is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    delta = (expires_at - now).total_seconds()
+                    if delta > 0:
+                        ttl = int(min(delta, RedisService.CACHE_TTL))
+                        redis_client.expire(key, ttl)
+                    else:
+                        # expired: don't set the key
+                        redis_client.delete(key)
+                        return False
+                else:
+                    # No DB expiry -> keep persistent in Redis
+                    try:
+                        redis_client.persist(key)
+                    except Exception:
+                        # If persist not supported or fails, set a default TTL
+                        redis_client.expire(key, RedisService.CACHE_TTL)
+            except Exception:
+                # Fall back to default TTL on any error
+                try:
+                    redis_client.expire(key, RedisService.CACHE_TTL)
+                except Exception:
+                    pass
             return True
         except Exception:
             return False
@@ -50,8 +78,13 @@ class RedisService:
         if not USE_REDIS:
             return None
         try:
-            result = redis_client.get(f"{RedisService.LINK_CACHE_PREFIX}{code}")
-            return cast(Optional[str], result)
+            key = f"{RedisService.LINK_CACHE_PREFIX}{code}"
+            data = cast(dict[str, str], redis_client.hgetall(key))
+            if not data:
+                return None
+
+            url = data.get("url")
+            return cast(Optional[str], url)
         except Exception:
             return None
     
@@ -106,7 +139,7 @@ class RedisService:
         Returns (is_allowed, remaining_requests).
         """
         if limit is None:
-            limit = settings.RATE_LIMIT_PER_HOUR
+            limit = get_int("RATE_LIMIT_PER_HOUR")
 
         if not USE_REDIS:
             # No Redis in dev: allow requests and report remaining limit
@@ -134,27 +167,7 @@ class RedisService:
             # If Redis fails, allow the request
             return True, limit
     
-    @staticmethod
-    def increment_click_stats(code: str) -> bool:
-        """Increment click stats for a code."""
-        if not USE_REDIS:
-            return True
-        try:
-            redis_client.incr(f"{RedisService.STATS_PREFIX}{code}:clicks")
-            return True
-        except Exception:
-            return False
-    
-    @staticmethod
-    def get_click_stats(code: str) -> int:
-        """Get click stats from Redis."""
-        if not USE_REDIS:
-            return 0
-        try:
-            clicks = redis_client.get(f"{RedisService.STATS_PREFIX}{code}:clicks")
-            return int(str(clicks)) if clicks else 0
-        except Exception:
-            return 0
+
     
     @staticmethod
     def sync_codes_from_db(codes: list) -> bool:

@@ -49,6 +49,17 @@ const elements = {
 let suffixCheckTimeout = null;
 let isSubmitting = false;
 
+function parseExpiryDate(value) {
+    if (!value) return null;
+    let v = String(value).trim();
+    if (!v) return null;
+    if (v.includes(' ') && !v.includes('T')) {
+        v = v.replace(' ', 'T');
+    }
+    const hasTz = /([zZ]|[+-]\d{2}:?\d{2})$/.test(v);
+    return new Date(hasTz ? v : v + 'Z');
+}
+
 // Initialize
 // Initialize after runtime config is loaded so API_BASE is correct
 loadRuntimeConfig().then(() => {
@@ -344,12 +355,16 @@ function showSuccessModal(data) {
     
     // Expiry info
     if (data.expires_at) {
-        const expiryDate = new Date(data.expires_at);
-        elements.expiresInfo.textContent = `Expires on ${expiryDate.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        })}`;
+        const expiryDate = parseExpiryDate(data.expires_at);
+        if (!expiryDate || isNaN(expiryDate.getTime())) {
+            elements.expiresInfo.textContent = `Expires at ${data.expires_at}`;
+        } else {
+            elements.expiresInfo.textContent = `Expires on ${expiryDate.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            })}`;
+        }
     } else {
         elements.expiresInfo.textContent = 'This link never expires';
     }

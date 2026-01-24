@@ -1,31 +1,28 @@
 import secrets
 import string
-import hashlib
 import re
 from urllib.parse import urlparse
 from typing import Optional
+from datetime import datetime, timezone
 from user_agents import parse as parse_user_agent  # type: ignore
-from .config import settings
+from .env import get_env, get_int, get_json_list
 
 
 def generate_short_code(length: Optional[int] = None) -> str:
     """Generate a random short code using nanoid-style characters."""
     if length is None:
-        length = settings.DEFAULT_CODE_LENGTH
+        length = get_int("DEFAULT_CODE_LENGTH")
     
     # URL-safe characters (similar to nanoid)
     alphabet = string.ascii_lowercase + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 
-def hash_ip(ip: str) -> str:
-    """Hash an IP address for privacy."""
-    return hashlib.sha256(ip.encode()).hexdigest()
-
 
 def is_reserved_code(code: str) -> bool:
     """Check if a code is reserved."""
-    return code.lower() in [r.lower() for r in settings.RESERVED_CODES]
+    reserved = get_json_list("RESERVED_CODES")
+    return code.lower() in [r.lower() for r in reserved]
 
 
 def extract_domain(url: str) -> Optional[str]:
@@ -88,5 +85,19 @@ def sanitize_referer(referer: str) -> Optional[str]:
 
 def format_short_url(code: str) -> str:
     """Format a short code into a full URL."""
-    base = settings.BASE_URL.rstrip('/')
+    base = get_env("BASE_URL").rstrip('/')
     return f"{base}/{code}"
+
+
+def utc_now() -> datetime:
+    """Return timezone-aware current UTC time."""
+    return datetime.now(timezone.utc)
+
+
+def normalize_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Normalize a datetime to timezone-aware UTC (assume naive is UTC)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
