@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install Python and backend dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip nginx \
+    python3 python3-venv python3-pip \
   && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/backend/requirements.txt
@@ -22,11 +22,10 @@ RUN cd /app/frontend && npm ci --omit=dev
 COPY frontend/public /app/frontend/public
 COPY frontend/server.js /app/frontend/server.js
 COPY start.sh /app/start.sh
-COPY nginx.conf /etc/nginx/nginx.conf
 RUN chmod +x /app/start.sh
 
 WORKDIR /app/backend
 
-EXPOSE 8000
+EXPOSE 3000 8000
 
 CMD ["bash", "/app/start.sh"]
