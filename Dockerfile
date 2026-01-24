@@ -2,7 +2,7 @@ FROM node:20-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=3000
+    PORT=17320
 
 WORKDIR /app
 
@@ -26,6 +26,6 @@ RUN chmod +x /app/start.sh
 
 WORKDIR /app/backend
 
-EXPOSE 3000 8000
+EXPOSE 17320 17321
 
 CMD ["bash", "/app/start.sh"]
