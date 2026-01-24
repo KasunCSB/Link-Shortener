@@ -8,11 +8,11 @@ WORKDIR /app
 
 # Install Python and backend dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip nginx \
+    python3 python3-venv python3-pip nginx \
   && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN python3 -m pip install --no-cache-dir -r /app/backend/requirements.txt
+RUN python3 -m pip install --no-cache-dir --break-system-packages -r /app/backend/requirements.txt
 
 # Copy app code and static frontend
 COPY backend /app/backend
